@@ -1,0 +1,2071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weekly Budget Tracker</title>
+    <!-- PWA Manifest Link -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Tailwind CSS CDN (LOADED FIRST) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind Configuration for Dark Mode (LOADED SECOND) -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons UMD Bundle (Used for reliable icon rendering via createIcons()) -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f7fafc; transition: background-color 0.3s; }
+        html.dark body { background-color: #0f172a; } /* slate-900 */
+        
+        .card { transition: all 0.3s ease; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+        html.dark .card { background-color: #1e293b; color: #e2e8f0; box-shadow: none; border: 1px solid #334155; }
+        
+        input[type="number"]::-webkit-inner-spin-button, 
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        
+        /* Ensures icon and text are centered in buttons */
+        .btn-content { display: flex; align-items: center; justify-content: center; }
+        
+        /* Dark mode fixes for specific elements */
+        html.dark .text-gray-900 { color: #f1f5f9; }
+        html.dark .text-gray-600 { color: #94a3b8; }
+        html.dark .bg-gray-50 { background-color: #1e293b; }
+        html.dark .border-gray-200 { border-color: #334155; }
+        html.dark .bg-white { background-color: #0f172a; }
+        html.dark .p-4.border { border-color: #334155 !important; }
+        html.dark input, html.dark select { background-color: #334155; border-color: #475569; color: #f1f5f9; }
+        html.dark input::placeholder { color: #94a3b8; }
+        
+        /* FIX: Ensure dark grey text turns white in dark mode */
+        html.dark .text-gray-800 { color: #f1f5f9 !important; }
+        
+        /* Modal Transition Animation Classes */
+        .modal-fade-enter { opacity: 0; }
+        .modal-fade-enter-active { opacity: 1; transition: opacity 300ms; }
+        .modal-slide-enter-active { transform: translate(0, 0); transition: transform 300ms ease-out; }
+        .modal-slide-exit-active { transform: translate(0, 20px); opacity: 0; transition: all 300ms ease-out; }
+        
+        /* Animation class for fixed expense removal */
+        .fixed-expense-removal-animate {
+            transition: all 0.4s ease-out;
+            opacity: 0; 
+            transform: translateX(-100px);
+            padding-top: 0;
+            padding-bottom: 0;
+            height: 0;
+            border: none;
+        }
+
+    </style>
+</head>
+<body class="p-4 md:p-8 bg-gray-50 min-h-screen">
+
+    <div id="loading-spinner" class="fixed inset-0 bg-gray-50 flex items-center justify-center z-50 dark:bg-slate-900">
+        <div class="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
+    </div>
+
+    <main id="main-content" class="max-w-6xl mx-auto hidden">
+        <header class="mb-8">
+            <h1 class="text-4xl font-extrabold text-gray-900 mb-2 flex items-center">
+                <span class="mr-3 text-blue-600">£</span> Weekly Budget Tracker
+            </h1>
+            <p class="text-gray-600">Period: <span id="period-name">Loading...</span> | Dates: <span id="period-dates">Loading...</span></p>
+            <!-- REMOVED STATUS SECTION -->
+        </header>
+        
+        <!-- Top Action Buttons -->
+        <div class="mb-6 flex justify-end items-center">
+            <button id="show-settings-btn" class="bg-gray-200 text-gray-700 p-3 rounded-xl font-semibold hover:bg-gray-300 transition duration-150 flex items-center justify-center shadow-md dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
+                <span class="btn-content mr-2" data-lucide="settings" data-size="18"></span> Settings
+            </button>
+            <!-- Removed Export CSV button -->
+        </div>
+
+        <!-- Summary Section (4 COLUMNS) -->
+        <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Total Income Card -->
+            <div class="card bg-white p-6 rounded-xl shadow-lg border-b-4 border-green-500">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-gray-500">Average Weekly Income</h2>
+                    <span class="text-green-500" data-lucide="dollar-sign" data-size="32"></span>
+                </div>
+                <p id="total-income" class="text-4xl font-bold text-gray-900 mt-1">£0.00</p>
+                <div class="text-sm text-gray-500 mt-2 space-y-1" id="income-breakdown">
+                    <!-- Income breakdown populated by JS -->
+                </div>
+            </div>
+
+            <!-- Estimated Monthly Allowance Card (UPDATED) -->
+            <div class="card bg-white p-6 rounded-xl shadow-lg border-b-4 border-yellow-500">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-gray-500">Estimated Monthly Allowance</h2>
+                    <span class="text-yellow-500" data-lucide="wallet" data-size="32"></span>
+                </div>
+                <p id="estimated-monthly-allowance-value" class="text-4xl font-bold text-gray-900 mt-1">£0.00</p>
+                <p class="text-sm text-gray-500 mt-2" id="monthly-allowance-inputs">Loading monthly totals...</p> 
+            </div>
+
+            <!-- Total Fixed Outgoings Card -->
+            <div class="card bg-white p-6 rounded-xl shadow-lg border-b-4 border-red-500">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-gray-500">Total Fixed Outgoings (Avg)</h2>
+                    <span class="text-red-500" data-lucide="shopping-cart" data-size="32"></span>
+                </div>
+                <p id="total-fixed-outgoings" class="text-4xl font-bold text-gray-900 mt-1">£0.00</p>
+                <p class="text-sm text-gray-500 mt-2">Includes all fixed bills (monthly avg + weekly).</p> 
+                <!-- Changed link to open Settings modal on the fixed-outgoings tab -->
+                <a href="#fixed-outgoings-management" class="text-blue-500 text-sm hover:underline" onclick="showSettingsModal('fixed-outgoings'); return false;">Manage Fixed Bills</a>
+            </div>
+
+            <!-- Weekly Spending Allowance Card -->
+            <div class="card bg-white p-6 rounded-xl shadow-lg border-b-4 border-blue-500">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-gray-500">Base Weekly Allowance (Avg)</h2>
+                    <span class="text-blue-500" data-lucide="wallet" data-size="32"></span>
+                </div>
+                <p id="weekly-allowance" class="text-4xl font-bold text-blue-600 mt-1">£0.00</p>
+                <p class="text-sm text-gray-500 mt-2">Your available amount *before* dynamic monthly deductions.</p>
+                <a href="#weekly-tracker" class="text-blue-500 text-sm hover:underline">Track Weekly Spending</a>
+            </div>
+        </section>
+
+        <!-- Weekly Tracker Section -->
+        <section id="weekly-tracker" class="bg-white p-6 rounded-xl shadow-lg">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Weekly Spending Tracker (<span id="num-weeks-display">14</span> Weeks)</h2>
+
+            <!-- Add Expense Form -->
+            <form id="add-weekly-expense-form" class="p-4 border border-blue-200 rounded-lg bg-blue-50 mb-6 dark:bg-gray-800 dark:border-blue-800">
+                <h3 class="font-semibold text-blue-800 mb-3 flex items-center dark:text-blue-400">
+                    <span class="mr-2" data-lucide="dollar-sign" data-size="16"></span> Log Ad-Hoc Expense
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <select id="expense-week" required class="p-2 border border-blue-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <!-- Options populated by JS -->
+                    </select>
+                    <input type="text" id="expense-name" required placeholder="Description (e.g., Groceries or Train Ticket)" class="p-2 border border-blue-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 col-span-1 md:col-span-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    <div class="relative">
+                        <span class="absolute left-3 top-2.5 text-gray-500 dark:text-gray-400">£</span>
+                        <input type="number" id="expense-amount" required step="0.01" min="0" placeholder="Amount" class="w-full pl-8 p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    </div>
+                    <button type="submit" class="bg-blue-600 text-white p-2 rounded-lg font-semibold hover:bg-blue-700 transition duration-150 flex items-center justify-center">
+                        <span class="btn-content mr-2" data-lucide="plus" data-size="18"></span> Add Expense
+                    </button>
+                </div>
+            </form>
+
+            <!-- Weeks Accordion/List -->
+            <div id="weeks-list" class="space-y-2">
+                <!-- Weeks will be dynamically generated here -->
+            </div>
+        </section>
+    </main>
+    
+    <!-- Custom Message/Edit Box -->
+    <div id="message-box" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        <!-- Modal content to be injected by JS -->
+    </div>
+    
+    <!-- Settings Modal (RESTORED TWO-TAB STRUCTURE) -->
+    <div id="settings-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-0 flex items-center justify-center z-50 p-4 transition-opacity duration-300">
+        <div id="settings-modal-content" class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transition-all duration-300 ease-out transform translate-y-5 opacity-0 dark:bg-slate-800">
+            <div class="p-6 border-b border-gray-200 flex justify-between items-center dark:border-gray-700">
+                <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Budget Settings</h2>
+                <button onclick="closeSettingsModal()" class="text-gray-500 hover:text-gray-700 transition duration-150 dark:text-gray-400 dark:hover:text-gray-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            
+            <div class="flex">
+                <!-- Tabs Sidebar -->
+                <div class="w-1/4 p-6 border-r border-gray-200 space-y-2 flex-shrink-0 dark:border-gray-700">
+                    <!-- Tab buttons updated to use dynamic class setting -->
+                    <button data-tab="periods" class="tab-btn w-full text-left p-3 rounded-lg font-semibold">Period & Income</button>
+                    <button data-tab="fixed-outgoings" class="tab-btn w-full text-left p-3 rounded-lg font-semibold">Fixed Outgoings</button>
+                    <button data-tab="display" class="tab-btn w-full text-left p-3 rounded-lg font-semibold">Display</button>
+                </div>
+                
+                <!-- Tab Content -->
+                <div class="w-3/4 p-6">
+                    
+                    <!-- Period & Income Tab -->
+                    <div data-tab-content="periods">
+                        <h3 class="text-xl font-bold text-gray-800 mb-4 dark:text-white">Period & Income Management</h3>
+
+                        <!-- Period Selector -->
+                        <div class="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
+                            <h4 class="font-semibold text-gray-700 mb-2 dark:text-gray-200">Active Budgeting Period</h4>
+                            <div class="flex items-center space-x-3">
+                                <select id="period-selector" class="flex-grow p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:border-gray-500 dark:text-white"></select>
+                                <button id="add-period-btn" class="bg-green-500 text-white p-2 rounded-lg hover:bg-green-600 transition duration-150 flex items-center">
+                                    <span data-lucide="plus" data-size="18"></span>
+                                </button>
+                                <button id="delete-period-btn" class="bg-red-500 text-white p-2 rounded-lg hover:bg-red-600 transition duration-150 flex items-center">
+                                    <span data-lucide="trash-2" data-size="18"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Period Details Form -->
+                        <form id="period-settings-form" class="p-4 border border-blue-200 rounded-lg bg-blue-50 dark:bg-gray-800 dark:border-blue-800">
+                            <h4 class="font-semibold text-blue-800 mb-3 dark:text-blue-400">Edit Period Details (<span id="form-period-name"></span>)</h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <label class="block">
+                                    <span class="text-gray-700 text-sm dark:text-gray-300">Period Name</span>
+                                    <input type="text" id="period-name-input" required class="mt-1 w-full p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                </label>
+                                <label class="block">
+                                    <span class="text-gray-700 text-sm dark:text-gray-300">Start Date</span>
+                                    <input type="date" id="start-date-input" required class="mt-1 w-full p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                </label>
+                                <label class="block">
+                                    <span class="text-gray-700 text-sm dark:text-gray-300">Duration (Weeks)</span>
+                                    <input type="number" id="duration-input" required min="1" class="mt-1 w-full p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                </label>
+                            </div>
+                            
+                            <!-- Wages Input -->
+                            <h4 class="font-semibold text-blue-800 mt-6 mb-3 border-t pt-3 dark:border-gray-700 dark:text-blue-400">Recurring Weekly Wages (Avg)</h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <label class="block">
+                                    <span class="text-gray-700 text-sm dark:text-gray-300">Hourly Rate (£)</span>
+                                    <div class="relative mt-1">
+                                        <span class="absolute left-3 top-2.5 text-gray-500 dark:text-gray-400">£</span>
+                                        <input type="number" id="hourly-rate-input" required step="0.01" min="0" class="w-full pl-8 p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                    </div>
+                                </label>
+                                <label class="block">
+                                    <span class="text-gray-700 text-sm dark:text-gray-300">Hours Per Week</span>
+                                    <input type="number" id="hours-per-week-input" required step="0.5" min="0" class="mt-1 w-full p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                </label>
+                                <p class="text-xs text-gray-500 sm:col-span-2 dark:text-gray-400">This calculates your core weekly income: Rate x Hours.</p>
+                            </div>
+
+                            <h4 class="font-semibold text-blue-800 mt-6 mb-3 border-t pt-3 dark:border-gray-700 dark:text-blue-400">Student Finance (Total for Period)</h4>
+                            <label class="block">
+                                <div class="relative mt-1">
+                                    <span class="absolute left-3 top-2.5 text-gray-500 dark:text-gray-400">£</span>
+                                    <input type="number" id="sf-input" required step="0.01" min="0" class="w-full pl-8 p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                </div>
+                            </label>
+                            
+                            <h4 class="font-semibold text-blue-800 mt-6 mb-3 border-t pt-3 dark:border-gray-700 dark:text-blue-400">PIP (Every 28 Days)</h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <!-- PIP Daily Living -->
+                                <label class="block">
+                                    <span class="text-gray-700 text-sm dark:text-gray-300">Daily Living Rate (per 28 days)</span>
+                                    <div class="relative mt-1">
+                                        <span class="absolute left-3 top-2.5 text-gray-500 dark:text-gray-400">£</span>
+                                        <input type="number" id="pip-daily-living-input" required step="0.01" min="0" class="w-full pl-8 p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                    </div>
+                                </label>
+                                <!-- PIP Mobility -->
+                                <label class="block">
+                                    <span class="text-gray-700 text-sm dark:text-gray-300">Mobility Rate (per 28 days)</span>
+                                    <div class="relative mt-1">
+                                        <span class="absolute left-3 top-2.5 text-gray-500 dark:text-gray-400">£</span>
+                                        <input type="number" id="pip-mobility-input" required step="0.01" min="0" class="w-full pl-8 p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                    </div>
+                                </label>
+                            </div>
+                            <label class="block mt-4">
+                                <span class="text-gray-700 text-sm dark:text-gray-300">First Payment Date (For reference only)</span>
+                                <input type="date" id="pip-first-date-input" required class="mt-1 w-full p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            </label>
+
+                            <div class="mt-6 flex justify-between border-t pt-3 dark:border-gray-700">
+                                <button id="reset-period-data-btn" type="button" class="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition duration-150 flex items-center justify-center">
+                                    <span class="btn-content mr-1" data-lucide="refresh-cw" data-size="16"></span> Reset Period Data
+                                </button>
+                                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition duration-150">
+                                    Apply & Close
+                                </button>
+                            </div>
+                        </form>
+
+                        <!-- Unscheduled/Correction Payments -->
+                        <div class="mt-8 p-4 border border-indigo-200 rounded-lg bg-indigo-50 dark:bg-gray-800 dark:border-indigo-800">
+                            <h4 class="font-semibold text-indigo-800 mb-3 flex items-center dark:text-indigo-400">
+                                <span class="mr-2" data-lucide="calendar" data-size="18"></span> Unscheduled/Correction Payments
+                            </h4>
+                            <p class="text-sm text-indigo-700 mb-3 dark:text-indigo-300">
+                                Payments logged here are averaged over the period to apply a minor correction to your weekly income estimate (e.g., bonus or error correction).
+                            </p>
+                            <div id="wage-payment-list" class="space-y-3 mb-4 p-3 bg-white rounded-lg border border-indigo-100 dark:bg-gray-700 dark:border-indigo-900">
+                                <!-- Wage items populated here -->
+                                <p class="text-gray-500 italic text-sm" id="wage-payment-placeholder">No unscheduled payments logged yet.</p>
+                            </div>
+
+                            <form id="add-wage-payment-form">
+                                <div class="flex flex-col sm:flex-row gap-3">
+                                    <input type="date" id="add-wage-date" required class="flex-grow p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                    <div class="relative flex-grow-0 w-full sm:w-32">
+                                        <span class="absolute left-3 top-2.5 text-gray-500 dark:text-gray-400">£</span>
+                                        <input type="number" id="add-wage-amount" required step="0.01" min="0" placeholder="Amount" class="w-full pl-8 p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                    </div>
+                                    <button type="submit" class="bg-indigo-600 text-white p-2 rounded-lg font-semibold hover:bg-indigo-700 transition duration-150 flex items-center justify-center">
+                                        <span class="btn-content mr-1" data-lucide="plus" data-size="18"></span> Add Payment
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                        
+                        <!-- Additional Income Sources -->
+                        <div class="mt-8 p-4 border border-green-200 rounded-lg bg-green-50 dark:bg-gray-800 dark:border-green-800">
+                            <h4 class="font-semibold text-green-800 mb-3 flex items-center dark:text-green-400">
+                                <span class="mr-2" data-lucide="circle-plus" data-size="18"></span> Additional Weekly Income
+                            </h4>
+                            <div id="additional-income-list" class="space-y-3 mb-4 p-3 bg-white rounded-lg border border-green-100 dark:bg-gray-700 dark:border-green-900">
+                                <!-- Custom income items populated here -->
+                                <p class="text-gray-500 italic text-sm" id="additional-income-placeholder">No custom weekly income sources added yet.</p>
+                            </div>
+
+                            <form id="add-additional-income-form">
+                                <div class="flex flex-col sm:flex-row gap-3">
+                                    <input type="text" id="add-income-name" required placeholder="Income Source Name (e.g., Side Job)" class="flex-grow p-2 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                    <div class="relative flex-grow-0 w-full sm:w-32">
+                                        <span class="absolute left-3 top-2.5 text-gray-500 dark:text-gray-400">£</span>
+                                        <input type="number" id="add-income-amount" required step="0.01" min="0" placeholder="Weekly Amt" class="w-full pl-8 p-2 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                    </div>
+                                    <button type="submit" class="bg-green-600 text-white p-2 rounded-lg font-semibold hover:bg-green-700 transition duration-150 flex items-center justify-center">
+                                        <span class="btn-content mr-1" data-lucide="plus" data-size="18"></span> Add
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                    </div>
+
+                    <!-- Fixed Outgoings Tab (RESTORED) -->
+                    <div data-tab-content="fixed-outgoings" class="hidden">
+                        <h3 class="text-xl font-bold text-gray-800 mb-4 dark:text-white">Fixed Expenses Management</h3>
+                        
+                        <!-- Delegated Listener Container -->
+                        <div id="fixed-outgoings-list" class="space-y-3 mb-6 p-4 bg-gray-50 rounded-lg border dark:bg-gray-700 dark:border-gray-600">
+                            <!-- Fixed expenses will be populated here by renderFixedOutgoings -->
+                            <p class="text-gray-500 italic" id="outgoings-placeholder">Loading fixed expenses...</p>
+                        </div>
+            
+                        <form id="add-fixed-outgoing-form-tab" class="mt-4 p-4 border border-gray-200 rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
+                            <h4 class="font-semibold text-gray-700 mb-3 dark:text-gray-200">Add New Fixed Expense</h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                <input type="text" id="outgoing-name-tab" required placeholder="Expense Name (e.g., Gym)" class="col-span-1 sm:col-span-4 p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                
+                                <div class="relative col-span-1 sm:col-span-2">
+                                    <span class="absolute left-3 top-2.5 text-gray-500 dark:text-gray-400">£</span>
+                                    <input type="number" id="outgoing-amount-tab" required step="0.01" min="0" placeholder="Amount" class="w-full pl-8 p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                </div>
+                                <select id="outgoing-frequency-tab" required class="col-span-1 sm:col-span-2 p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                    <option value="monthly">Monthly</option>
+                                    <option value="weekly">Weekly</option>
+                                </select>
+
+                                <!-- Day of Month Input -->
+                                <div id="day-of-month-group-tab" class="col-span-1 sm:col-span-2 hidden">
+                                    <label class="block">
+                                        <span class="text-gray-700 text-sm dark:text-gray-300">Day of Month Due</span>
+                                        <input type="number" id="outgoing-day-of-month-tab" min="1" max="31" placeholder="1 - 31" class="mt-1 w-full p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                    </label>
+                                </div>
+                                
+                                <button type="submit" class="bg-blue-600 text-white p-2 rounded-lg font-semibold hover:bg-blue-700 transition duration-150 flex items-center justify-center col-span-1 sm:col-span-4 mt-2">
+                                    <span class="btn-content mr-2" data-lucide="plus" data-size="18"></span> Add Expense
+                                </button>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-2 dark:text-gray-400">Monthly amounts are averaged (divided by $4.33$) for the Base Allowance, but the full amount is deducted in the weekly tracker on the specified due day.</p>
+                        </form>
+                    </div>
+                    
+                    <!-- Display Tab (NEW) -->
+                    <div data-tab-content="display" class="hidden">
+                        <h3 class="text-xl font-bold text-gray-800 mb-4 dark:text-white">Display Settings</h3>
+                        
+                        <div class="p-4 border border-gray-200 rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
+                            <h4 class="font-semibold text-gray-700 mb-3 dark:text-gray-300">Theme Preference</h4>
+                            <div class="space-y-2">
+                                <label class="flex items-center space-x-3">
+                                    <input type="radio" name="theme-choice" value="system" class="form-radio text-blue-600" onchange="applyTheme(this.value)">
+                                    <span class="text-gray-700 dark:text-gray-300">System (Matches OS setting)</span>
+                                </label>
+                                <label class="flex items-center space-x-3">
+                                    <input type="radio" name="theme-choice" value="light" class="form-radio text-blue-600" onchange="applyTheme(this.value)">
+                                    <span class="text-gray-700 dark:text-gray-300">Light Mode</span>
+                                </label>
+                                <label class="flex items-center space-x-3">
+                                    <input type="radio" name="theme-choice" value="dark" class="form-radio text-blue-600" onchange="applyTheme(this.value)">
+                                    <span class="text-gray-700 dark:text-gray-300">Dark Mode</span>
+                                </label>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- END Settings Modal -->
+    
+    <!-- Welcome Modal (NEW) -->
+    <div id="welcome-modal" class="hidden fixed inset-0 bg-blue-900 bg-opacity-95 flex items-center justify-center z-[100] p-4 modal-fade-enter">
+        <div id="welcome-modal-content" class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-8 dark:bg-slate-800 text-gray-800 dark:text-white transition-all duration-300 ease-out transform translate-y-5 opacity-0">
+            <h2 class="text-3xl font-bold text-blue-600 mb-4">Welcome to Your Budget Tracker!</h2>
+            <p class="mb-4">This tool will help you manage your income and track your weekly spending allowance based on real cash flow.</p>
+            
+            <h3 class="text-xl font-semibold mb-2 mt-4">How to Get Started:</h3>
+            <ul class="list-disc list-inside space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                <li>Click the <span class="font-bold">Settings</span> button in the top right.</li>
+                <li>Go to the <span class="font-bold">Period & Income</span> tab to enter your hourly rate, hours per week, Student Finance total, and PIP rates.</li>
+                <li>Go to the <span class="font-bold">Fixed Outgoings</span> tab to enter your monthly bills (e.g., Apple Care, rent).</li>
+                <li>Once complete, your <span class="font-bold">Base Weekly Allowance</span> will calculate, and the <span class="font-bold">Weekly Spending Tracker</span> will be ready to use!</li>
+            </ul>
+
+            <button onclick="dismissWelcome()" class="mt-6 w-full bg-blue-600 text-white p-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-150 shadow-md">
+                Got It! Start Budgeting
+            </button>
+        </div>
+    </div>
+    <!-- END Welcome Modal -->
+
+    
+    <!-- Custom Message/Edit Box (Repeated here for simplicity of access) -->
+    <div id="message-box" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        <!-- Modal content to be injected by JS -->
+    </div>
+    
+    <!-- PWA Service Worker Registration -->
+    <script>
+        // NOTE: PWA registration is commented out as it causes errors in local/Electron environments.
+        /*
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // The service worker path is often tricky. We use the relative path here for local stability.
+                navigator.serviceWorker.register('./service_worker.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker registration failed: ', error);
+                    });
+            });
+        }
+        */
+    </script>
+
+    <!-- Firebase/Local Storage Logic -->
+    <script type="module"> 
+        // Import all required Firebase functions once at the module level
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+
+        // --- LOCAL STORAGE UTILITIES (MOVED TO TOP) ---
+
+        const getLocalData = (key, defaultValue) => {
+            try {
+                const stored = localStorage.getItem(key);
+                if (stored) return JSON.parse(stored);
+            } catch (e) {
+                console.error("Error reading localStorage", e);
+            }
+            return defaultValue;
+        };
+
+        const saveLocalData = (key, data) => {
+            try {
+                localStorage.setItem(key, JSON.stringify(data));
+            } catch (e) {
+                console.error("Error writing localStorage", e);
+            }
+        };
+
+        const saveLocalPeriods = () => {
+            saveLocalData(LOCAL_STORAGE_PERIODS_KEY, periodsData);
+            saveLocalData(LOCAL_STORAGE_ACTIVE_PERIOD_KEY, activePeriodId);
+        };
+        
+        // Global Firebase variables provided by the environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        // Mode Detection
+        const isEnvironmentHosted = firebaseConfig !== null && firebaseConfig.projectId;
+        let isLocalMode = !isEnvironmentHosted; 
+
+        // Constants
+        const WEEKS_IN_MONTH = 52 / 12; // Approx 4.333
+        const DAYS_IN_PIP_CYCLE = 28;
+        const LOCAL_STORAGE_PERIODS_KEY = 'budgetPeriodsData';
+        const LOCAL_STORAGE_ACTIVE_PERIOD_KEY = 'activePeriodId';
+        const LOCAL_STORAGE_THEME_KEY = 'themeMode'; 
+        const LOCAL_STORAGE_WELCOME_KEY = 'hasSeenWelcome'; // NEW
+
+        // Initial Data Templates 
+        
+        // REMOVED ALL HARDCODED STARTING EXPENSES
+        const INITIAL_FIXED_OUTGOINGS = [];
+
+        // Function to generate the initial empty structure for N weeks
+        const generateInitialWeeks = (numWeeks) => Array.from({ length: numWeeks }, (_, i) => ({
+            weekNum: i + 1,
+            expenses: [],
+        }));
+        
+        // NEW: Structure to hold all budgeting periods (Semester 2 removed)
+        const INITIAL_PERIODS_DATA = {
+            'semester-1': {
+                id: 'semester-1',
+                name: 'Semester 1 (Start Here)',
+                startDate: new Date().toISOString().split('T')[0], // Default to current date
+                durationWeeks: 14,
+                // UPDATED INCOME STRUCTURE (ALL ZEROD OUT)
+                income: {
+                    studentFinance: 0, 
+                    hourlyRate: 0,
+                    hoursPerWeek: 0,
+                    unscheduledWages: [], 
+                    pip: {
+                        dailyLivingRate: 0,
+                        mobilityRate: 0, 
+                        firstDate: new Date().toISOString().split('T')[0]
+                    },
+                },
+                additionalIncome: [], // Custom weekly incomes
+                fixedOutgoings: INITIAL_FIXED_OUTGOINGS, 
+                weeklyExpenses: generateInitialWeeks(14)
+            }
+        };
+
+        // Shared State
+        let app, db, auth;
+        let userId = null;
+        let isAuthReady = isLocalMode; 
+        let unsubscribeFixed, unsubscribeWeekly;
+        
+        let periodsData = {}; // Full periods data structure
+        let activePeriodId = 'semester-1'; // ID of the currently selected period
+        
+        // Elements for Modal Animation
+        let settingsModal = null;
+        let settingsModalContent = null;
+        let welcomeModal = null; // NEW
+        let welcomeModalContent = null; // NEW
+        
+        // NEW: Theme state 
+        let themeMode = getLocalData(LOCAL_STORAGE_THEME_KEY, 'system'); 
+
+
+        // Convenience getters for active period data
+        // CRITICAL FIX: Add a safeguard to ensure data structure exists
+        const getActivePeriod = () => periodsData[activePeriodId];
+        const getFixedOutgoings = () => getActivePeriod()?.fixedOutgoings || [];
+        const getWeeklyExpenses = () => getActivePeriod()?.weeklyExpenses || [];
+        const getAdditionalIncome = () => getActivePeriod()?.additionalIncome || [];
+
+
+        // --- FORMATTING UTILITIES ---
+
+        const formatCurrency = (amount) => {
+            return amount.toFixed(2);
+        }
+        
+        const formatCurrencyDisplay = (amount) => {
+            return `£${amount.toFixed(2)}`;
+        }
+
+        // --- THEME / DISPLAY FUNCTIONS ---
+        
+        const applyTheme = (theme) => {
+            const root = document.documentElement;
+            themeMode = theme;
+            saveLocalData(LOCAL_STORAGE_THEME_KEY, theme);
+
+            if (theme === 'system') {
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if (prefersDark) {
+                    root.classList.add('dark');
+                } else {
+                    root.classList.remove('dark');
+                }
+            } else if (theme === 'dark') {
+                root.classList.add('dark');
+            } else {
+                root.classList.remove('dark');
+            }
+            
+            // Update setting radio buttons if they exist
+            document.querySelectorAll('input[name="theme-choice"]').forEach(input => {
+                if (input.value === theme) {
+                    input.checked = true;
+                }
+            });
+        };
+        
+        // Expose applyTheme to global scope for onchange in HTML
+        window.applyTheme = applyTheme;
+
+
+        // --- MODAL/MESSAGE BOX FUNCTIONS ---
+
+        function closeMessageBox() {
+            document.getElementById('message-box').classList.add('hidden');
+            document.getElementById('message-box').innerHTML = '';
+        }
+
+        function closeSettingsModal() {
+            if (settingsModal) {
+                // 1. Start exit animation
+                settingsModal.style.opacity = 0;
+                if (settingsModalContent) {
+                    settingsModalContent.classList.add('translate-y-5', 'opacity-0');
+                    settingsModalContent.classList.remove('translate-y-0', 'opacity-100');
+                }
+
+                // 2. Hide modal after animation completes (300ms transition time)
+                setTimeout(() => {
+                    settingsModal.classList.add('hidden');
+                    // Re-render to ensure any applied changes (dates, income) are reflected on the main page
+                    calculateTotals(getFixedOutgoings());
+                    if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+                        lucide.createIcons();
+                    }
+                }, 300); 
+            }
+        }
+        
+        // Expose to global scope for HTML onclick attribute
+        window.closeMessageBox = closeMessageBox;
+        window.closeSettingsModal = closeSettingsModal;
+
+
+        const showSettingsModal = (initialTab = 'periods') => {
+            // 1. Prepare UI
+            renderSettingsModal(initialTab);
+            
+            // 2. Show backdrop instantly
+            if (settingsModal) {
+                settingsModal.classList.remove('hidden');
+                settingsModal.style.opacity = 0;
+                
+                // 3. Force reflow (necessary for transition to work)
+                settingsModal.offsetHeight; 
+
+                // 4. Animate backdrop and content
+                setTimeout(() => {
+                    settingsModal.style.opacity = 1;
+                    if (settingsModalContent) {
+                        settingsModalContent.classList.remove('translate-y-5', 'opacity-0');
+                        settingsModalContent.classList.add('translate-y-0', 'opacity-100');
+                    }
+                }, 10);
+            }
+        }
+        
+        // Expose to global scope for HTML onclick attribute
+        window.showSettingsModal = showSettingsModal;
+        
+        // NEW: Welcome Modal Functions
+        const startAppAfterWelcome = () => {
+            document.getElementById('loading-spinner').classList.add('hidden');
+            document.getElementById('main-content').classList.remove('hidden');
+            calculateTotals(getFixedOutgoings());
+        };
+
+        const dismissWelcome = () => {
+            saveLocalData(LOCAL_STORAGE_WELCOME_KEY, true);
+            
+            if (welcomeModal) {
+                // 1. Start exit animation
+                welcomeModal.style.opacity = 0;
+                if (welcomeModalContent) {
+                    welcomeModalContent.classList.add('translate-y-5', 'opacity-0');
+                    welcomeModalContent.classList.remove('translate-y-0', 'opacity-100');
+                }
+
+                // 2. Hide modal after animation completes (300ms transition time)
+                setTimeout(() => {
+                    welcomeModal.classList.add('hidden');
+                    
+                    // NEW: Start app and open settings immediately
+                    document.getElementById('loading-spinner').classList.add('hidden');
+                    document.getElementById('main-content').classList.remove('hidden');
+                    
+                    // CRITICAL FIX: Ensure calculation runs BEFORE opening settings
+                    calculateTotals(getFixedOutgoings()); 
+                    showSettingsModal('periods'); // Take user straight to settings
+
+                }, 300); 
+            } else {
+                // Fallback start app flow (rarely hit)
+                startAppAfterWelcome();
+            }
+        };
+
+        window.dismissWelcome = dismissWelcome;
+
+
+        // --- CRUD & PERIOD MANAGEMENT ---
+
+        /** Period Management */
+
+        const setActivePeriod = (id) => {
+            activePeriodId = id;
+            if (isLocalMode) saveLocalPeriods();
+            
+            // Re-initialize listeners or simply call totals for local mode
+            if (!isLocalMode) {
+                setupCloudListeners(); 
+            } else {
+                calculateTotals(getFixedOutgoings());
+            }
+            // Ensure settings modal re-renders with new period data if it's open
+            if (!document.getElementById('settings-modal').classList.contains('hidden')) {
+                renderSettingsModal('periods'); // Always default to periods tab when period changes
+            }
+        };
+
+        const handlePeriodSettingsFormSubmit = (e) => {
+            e.preventDefault();
+            
+            const activePeriod = getActivePeriod();
+            if (!activePeriod) return;
+
+            // 1. Get Form Data
+            const newName = document.getElementById('period-name-input').value.trim();
+            const newStartDate = document.getElementById('start-date-input').value;
+            const newDuration = parseInt(document.getElementById('duration-input').value);
+            const newSF = parseFloat(document.getElementById('sf-input').value);
+            // NEW WAGES INPUTS
+            const newHourlyRate = parseFloat(document.getElementById('hourly-rate-input').value);
+            const newHoursPerWeek = parseFloat(document.getElementById('hours-per-week-input').value);
+            // PIP Inputs
+            const newPIPDailyLivingRate = parseFloat(document.getElementById('pip-daily-living-input').value);
+            const newPIPMobilityRate = parseFloat(document.getElementById('pip-mobility-input').value);
+            const newPIPFirstDate = document.getElementById('pip-first-date-input').value;
+
+            if (!newName || !newStartDate || isNaN(newDuration) || newDuration < 1 || isNaN(newSF) || newSF < 0 || 
+                isNaN(newPIPDailyLivingRate) || newPIPDailyLivingRate < 0 || isNaN(newPIPMobilityRate) || newPIPMobilityRate < 0 || !newPIPFirstDate ||
+                isNaN(newHourlyRate) || newHourlyRate < 0 || isNaN(newHoursPerWeek) || newHoursPerWeek < 0) {
+                console.error("Invalid period settings input.");
+                return;
+            }
+
+            // 2. Update Period Data
+            const oldDuration = activePeriod.durationWeeks;
+            activePeriod.name = newName;
+            activePeriod.startDate = newStartDate;
+            activePeriod.durationWeeks = newDuration;
+            activePeriod.income.studentFinance = newSF;
+            activePeriod.income.hourlyRate = newHourlyRate; // NEW
+            activePeriod.income.hoursPerWeek = newHoursPerWeek; // NEW
+            activePeriod.income.pip.dailyLivingRate = newPIPDailyLivingRate;
+            activePeriod.income.pip.mobilityRate = newPIPMobilityRate;
+            activePeriod.income.pip.firstDate = newPIPFirstDate;
+
+            // 3. Re-generate weekly expense structure if duration changes
+            if (newDuration !== oldDuration) {
+                activePeriod.weeklyExpenses = generateInitialWeeks(newDuration);
+            }
+            
+            // 4. Save and Recalculate
+            if (isLocalMode) {
+                saveLocalPeriods();
+            } 
+
+            closeSettingsModal();
+        };
+        
+        // NEW: Function to reset period data to initial defaults
+        const resetActivePeriodToInitialData = () => {
+            // Deep clone the initial data to start fresh, only for the active period
+            const newPeriodId = 'semester-1';
+            periodsData = JSON.parse(JSON.stringify(INITIAL_PERIODS_DATA));
+            activePeriodId = newPeriodId; // Ensure we are on a clean, known period
+            saveLocalPeriods();
+            calculateTotals(getFixedOutgoings());
+            // Need to ensure the modal refreshes if it's open
+            if (!document.getElementById('settings-modal').classList.contains('hidden')) {
+                renderSettingsModal('periods');
+            }
+            console.warn("--- PERIOD DATA HAS BEEN RESET TO INITIAL DEFAULTS ---");
+        };
+
+        const addPeriod = () => {
+             const newId = crypto.randomUUID();
+             const newPeriod = {
+                id: newId,
+                name: 'New Custom Period',
+                startDate: new Date().toISOString().split('T')[0],
+                durationWeeks: 12,
+                income: {
+                    studentFinance: 0,
+                    hourlyRate: 0,
+                    hoursPerWeek: 0,
+                    unscheduledWages: [],
+                    pip: { dailyLivingRate: 0, mobilityRate: 0, firstDate: new Date().toISOString().split('T')[0] }, 
+                },
+                additionalIncome: [],
+                fixedOutgoings: [], 
+                weeklyExpenses: generateInitialWeeks(12)
+            };
+            periodsData[newId] = newPeriod;
+            setActivePeriod(newId);
+            renderSettingsModal('periods');
+        };
+
+        const deletePeriod = () => {
+            const periodIds = Object.keys(periodsData);
+            if (periodIds.length <= 1) {
+                console.warn("Cannot delete the last remaining period.");
+                return;
+            }
+            
+            delete periodsData[activePeriodId];
+            
+            // Set new active period
+            activePeriodId = Object.keys(periodsData)[0];
+            
+            if (isLocalMode) saveLocalPeriods();
+
+            setActivePeriod(activePeriodId);
+        };
+
+
+        /** Income Management */
+
+        const addWagePayment = async (e) => {
+            e.preventDefault();
+            const date = document.getElementById('add-wage-date').value;
+            const amount = parseFloat(document.getElementById('add-wage-amount').value);
+
+            if (!isAuthReady || !date || isNaN(amount) || amount <= 0) return;
+
+            const newPayment = { id: crypto.randomUUID(), date, amount };
+            const activePeriod = getActivePeriod();
+            
+            if (activePeriod) {
+                activePeriod.income.unscheduledWages.push(newPayment); // UPDATED: unscheduledWages
+                
+                if (isLocalMode) saveLocalPeriods();
+                
+                calculateTotals(getFixedOutgoings());
+                renderSettingsModal('periods'); 
+            }
+            e.target.reset();
+        };
+
+        const removeWagePayment = (id) => {
+            if (!isAuthReady) return;
+            const activePeriod = getActivePeriod();
+
+            if (activePeriod) {
+                activePeriod.income.unscheduledWages = activePeriod.income.unscheduledWages.filter(item => item.id !== id); // UPDATED: unscheduledWages
+                
+                if (isLocalMode) saveLocalPeriods();
+                
+                calculateTotals(getFixedOutgoings());
+                renderSettingsModal('periods'); 
+            }
+        };
+
+        const addAdditionalIncome = async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('add-income-name').value.trim();
+            const amount = parseFloat(document.getElementById('add-income-amount').value);
+
+            if (!isAuthReady || name === "" || isNaN(amount) || amount <= 0) return;
+
+            const newIncome = { id: crypto.randomUUID(), name, amount };
+            let currentAdditionalIncome = getAdditionalIncome();
+
+            if (isLocalMode) {
+                currentAdditionalIncome.push(newIncome);
+                periodsData[activePeriodId].additionalIncome = currentAdditionalIncome;
+                saveLocalPeriods();
+                calculateTotals(getFixedOutgoings());
+            } else {
+                // Cloud logic: using client-side update for now as these are volatile settings.
+                currentAdditionalIncome.push(newIncome);
+                periodsData[activePeriodId].additionalIncome = currentAdditionalIncome;
+                calculateTotals(getFixedOutgoings());
+            }
+            e.target.reset();
+            renderSettingsModal('periods'); // Re-render the tab to show new entry
+        };
+
+        const removeAdditionalIncome = (id) => {
+            if (!isAuthReady) return;
+            let currentAdditionalIncome = getAdditionalIncome();
+
+            currentAdditionalIncome = currentAdditionalIncome.filter(item => item.id !== id);
+            periodsData[activePeriodId].additionalIncome = currentAdditionalIncome;
+            
+            if (isLocalMode) {
+                saveLocalPeriods();
+            }
+            
+            calculateTotals(getFixedOutgoings());
+            renderSettingsModal('periods'); // Re-render the tab
+        };
+
+
+        /** Fixed Outgoings CRUD */
+
+        async function removeFixedOutgoing(id) {
+            if (!isAuthReady) return;
+            
+            let currentFixedOutgoings = getFixedOutgoings();
+
+            if (isLocalMode) {
+                const list = document.getElementById('fixed-outgoings-list');
+                // Find the specific item element by delegation data-id
+                const deleteButton = list.querySelector(`[data-id="${id}"]`);
+                // Use closest to find the container div
+                const itemElement = deleteButton ? deleteButton.closest('div.flex') : null;
+
+                if (itemElement) {
+                    // 1. Trigger Animation (using utility class definition)
+                    itemElement.classList.add('fixed-expense-removal-animate');
+
+                    // 2. Wait for animation to finish (400ms based on transition)
+                    setTimeout(() => {
+                        // 3. Remove item from data array and re-render list
+                        currentFixedOutgoings = currentFixedOutgoings.filter(item => item.id !== id);
+                        periodsData[activePeriodId].fixedOutgoings = currentFixedOutgoings;
+                        saveLocalPeriods();
+                        
+                        // CRITICAL: Force re-render and recalculate totals
+                        renderFixedOutgoings(currentFixedOutgoings);
+                        calculateTotals(currentFixedOutgoings);
+                    }, 400); 
+
+                } else {
+                    // Fallback non-animated removal
+                    currentFixedOutgoings = currentFixedOutgoings.filter(item => item.id !== id);
+                    periodsData[activePeriodId].fixedOutgoings = currentFixedOutgoings;
+                    saveLocalPeriods();
+                    // FIX: Ensure the list is re-rendered immediately in fallback path too
+                    setTimeout(() => {
+                        renderFixedOutgoings(currentFixedOutgoings);
+                        calculateTotals(currentFixedOutgoings);
+                    }, 0);
+                }
+                
+            } else {
+                try {
+                    const { fixedDocRef } = getDocRefs();
+                    const itemToRemove = currentFixedOutgoings.find(item => item.id === id); 
+                    if (itemToRemove) {
+                        // Cloud updates will trigger the onSnapshot listener
+                        await updateDoc(fixedDocRef, { fixedOutgoings: arrayRemove(itemToRemove) });
+                    }
+                } catch (error) {
+                    console.error("Error removing fixed outgoing (Cloud):", error);
+                }
+            }
+        }
+        
+        /** Weekly Expenses CRUD */
+
+        const handleEditSubmit = async (e, weekNum, expenseId, oldName, oldAmount) => {
+            e.preventDefault();
+            const newName = document.getElementById('edit-expense-name').value.trim();
+            const newAmount = parseFloat(document.getElementById('edit-expense-amount').value);
+            
+            if (newName === "" || isNaN(newAmount) || newAmount <= 0) {
+                console.error("Invalid input for expense edit.");
+                return;
+            }
+            
+            await updateWeeklyExpense(weekNum, expenseId, newName, newAmount);
+            closeMessageBox();
+        };
+
+        const showEditModal = (weekNum, id, name, amount) => {
+            const messageBox = document.getElementById('message-box');
+            messageBox.innerHTML = `
+                <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm">
+                    <h3 class="text-xl font-bold mb-4 text-gray-800">Edit Expense (Week ${weekNum})</h3>
+                    <form id="edit-expense-form">
+                        <label class="block mb-4">
+                            <span class="text-gray-700 text-sm">Description</span>
+                            <input type="text" id="edit-expense-name" required value="${name}" class="mt-1 w-full p-2 border border-gray-300 rounded-lg">
+                        </label>
+                        <label class="block mb-4">
+                            <span class="text-gray-700 text-sm">Amount (£)</span>
+                            <div class="relative mt-1">
+                                <span class="absolute left-3 top-2.5 text-gray-500">£</span>
+                                <input type="number" id="edit-expense-amount" required step="0.01" min="0" value="${amount}" class="w-full pl-8 p-2 border border-gray-300 rounded-lg">
+                            </div>
+                        </label>
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" onclick="closeMessageBox()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition duration-150">Cancel</button>
+                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition duration-150">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            messageBox.classList.remove('hidden');
+            
+            const form = document.getElementById('edit-expense-form');
+            form.addEventListener('submit', (e) => handleEditSubmit(e, weekNum, id, name, amount));
+        };
+        
+        async function updateWeeklyExpense(weekNum, expenseId, newName, newAmount) {
+            if (!isAuthReady) return;
+            
+            let currentWeeklyExpenses = getWeeklyExpenses();
+            const targetWeekIndex = currentWeeklyExpenses.findIndex(w => w.weekNum === weekNum);
+            if (targetWeekIndex === -1) return;
+
+            const updatedExpense = { id: expenseId, name: newName, amount: newAmount };
+
+            if (isLocalMode) {
+                const expenseIndex = currentWeeklyExpenses[targetWeekIndex].expenses.findIndex(e => e.id === expenseId);
+                if (expenseIndex !== -1) {
+                    currentWeeklyExpenses[targetWeekIndex].expenses[expenseIndex] = updatedExpense;
+                    periodsData[activePeriodId].weeklyExpenses = currentWeeklyExpenses;
+                    saveLocalPeriods();
+                    calculateTotals(getFixedOutgoings());
+                }
+            } else {
+                try {
+                    const { weeklyDocRef } = getDocRefs();
+                    const docSnap = await getDoc(weeklyDocRef);
+                    let dataToUpdate = docSnap.exists() ? docSnap.data().weeklyExpenses : [];
+                    
+                    if (dataToUpdate.length > 0) {
+                        dataToUpdate = dataToUpdate.map(w => {
+                            if (w.weekNum === weekNum) {
+                                return { 
+                                    ...w, 
+                                    expenses: w.expenses.map(e => 
+                                        e.id === expenseId ? updatedExpense : e
+                                    ) 
+                                };
+                            }
+                            return w;
+                        });
+                        await setDoc(weeklyDocRef, { weeklyExpenses: dataToUpdate });
+                    }
+                } catch (error) {
+                    console.error("Error updating weekly expense (Cloud):", error);
+                }
+            }
+        }
+
+        async function removeWeeklyExpense(weekNum, expenseId) {
+            if (!isAuthReady) return;
+            
+            let currentWeeklyExpenses = getWeeklyExpenses();
+            const targetWeekIndex = currentWeeklyExpenses.findIndex(w => w.weekNum === weekNum);
+
+            if (targetWeekIndex === -1) return;
+
+            if (isLocalMode) {
+                currentWeeklyExpenses[targetWeekIndex].expenses = currentWeeklyExpenses[targetWeekIndex].expenses.filter(e => e.id !== expenseId);
+                periodsData[activePeriodId].weeklyExpenses = currentWeeklyExpenses;
+                saveLocalPeriods();
+                calculateTotals(getFixedOutgoings());
+            } else {
+                try {
+                    const { weeklyDocRef } = getDocRefs();
+                    
+                    const docSnap = await getDoc(weeklyDocRef);
+                    let dataToUpdate = docSnap.exists() ? docSnap.data().weeklyExpenses : [];
+                    
+                    if (dataToUpdate.length > 0) {
+                        dataToUpdate = dataToUpdate.map(w => {
+                            if (w.weekNum === weekNum) {
+                                return { ...w, expenses: w.expenses.filter(e => e.id !== expenseId) };
+                            }
+                            return w;
+                        });
+                        await setDoc(weeklyDocRef, { weeklyExpenses: dataToUpdate });
+                    }
+                } catch (error) {
+                    console.error("Error removing weekly expense (Cloud):", error);
+                }
+            }
+        }
+
+
+        // --- UI RENDERING ---
+        
+        const updateModeDisplay = () => {
+            // REMOVED LOGIC: Not needed for local/Electron app
+            /*
+            const userIdElement = document.getElementById('user-id');
+            if (isLocalMode) {
+                userIdElement.textContent = 'LOCAL MODE (Data saved in browser)';
+                userIdElement.classList.add('bg-yellow-200', 'text-yellow-800', 'font-semibold');
+                userIdElement.classList.remove('dark:bg-gray-700', 'dark:text-gray-200');
+            } else {
+                userIdElement.textContent = userId ? `Cloud ID: ${userId}` : 'Connecting...';
+                userIdElement.classList.remove('bg-yellow-200', 'text-yellow-800', 'font-semibold');
+                userIdElement.classList.add('dark:bg-gray-700', 'dark:text-gray-200');
+            }
+            */
+        }
+
+        const getDateRangeForWeek = (index, startDateISO) => {
+            const startDate = new Date(startDateISO);
+            
+            const startDay = new Date(startDate.getTime());
+            startDay.setDate(startDay.getDate() + (index * 7));
+            
+            const endDay = new Date(startDay.getTime());
+            endDay.setDate(endDay.getDate() + 6);
+            
+            const formatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
+            return `${formatter.format(startDay)} - ${formatter.format(endDay)}`;
+        }
+
+        const toggleWeekDetails = (weekNum) => {
+            const details = document.getElementById(`week-details-${weekNum}`);
+            const icon = document.querySelector(`[data-arrow-icon="${weekNum}"]`);
+            if (details.classList.contains('hidden')) {
+                details.classList.remove('hidden');
+                icon.classList.remove('rotate-0');
+                icon.classList.add('rotate-180');
+            } else {
+                details.classList.add('hidden');
+                icon.classList.remove('rotate-180');
+                icon.classList.add('rotate-0');
+            }
+        }
+
+        const renderAdditionalIncome = (incomeSources) => {
+            const list = document.getElementById('additional-income-list');
+            list.innerHTML = '';
+
+            if (incomeSources.length === 0) {
+                list.innerHTML = '<p class="text-gray-500 italic text-sm" id="additional-income-placeholder">No custom weekly income sources added yet.</p>';
+                return;
+            }
+            
+            incomeSources.forEach(item => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'flex justify-between items-center bg-white p-3 rounded-lg border border-green-200 dark:bg-gray-700 dark:border-green-900';
+                itemDiv.innerHTML = `
+                    <div class="flex-grow">
+                        <p class="font-medium text-gray-800 dark:text-white">${item.name}</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Weekly: ${formatCurrencyDisplay(item.amount)}</p>
+                    </div>
+                    <button data-id="${item.id}" class="remove-additional-income-btn text-red-500 hover:text-red-700 transition duration-150 p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/50">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                `;
+                list.appendChild(itemDiv);
+            });
+
+            list.querySelectorAll('.remove-additional-income-btn').forEach(button => {
+                button.addEventListener('click', (e) => removeAdditionalIncome(e.currentTarget.dataset.id));
+            });
+            
+            // Re-create icons for new list items
+            if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+                lucide.createIcons();
+            }
+        }
+
+        const renderWagePayments = (payments) => {
+            const list = document.getElementById('wage-payment-list');
+            list.innerHTML = '';
+
+            if (payments.length === 0) {
+                list.innerHTML = '<p class="text-gray-500 italic text-sm" id="wage-payment-placeholder">No unscheduled payments logged yet.</p>';
+                return;
+            }
+            
+            payments.sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(item => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'flex justify-between items-center bg-white p-3 rounded-lg border border-indigo-200 dark:bg-gray-700 dark:border-indigo-900';
+                itemDiv.innerHTML = `
+                    <div class="flex-grow">
+                        <p class="font-medium text-gray-800 dark:text-white">${formatCurrencyDisplay(item.amount)}</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Due: ${new Date(item.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                    </div>
+                    <button data-id="${item.id}" class="remove-wage-payment-btn text-red-500 hover:text-red-700 transition duration-150 p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/50">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                `;
+                list.appendChild(itemDiv);
+            });
+
+            list.querySelectorAll('.remove-wage-payment-btn').forEach(button => {
+                button.addEventListener('click', (e) => removeWagePayment(e.currentTarget.dataset.id));
+            });
+        }
+
+
+        const renderFixedOutgoings = (expenses) => {
+            const list = document.getElementById('fixed-outgoings-list');
+            list.innerHTML = '';
+
+            if (expenses.length === 0) {
+                list.innerHTML = '<p class="text-gray-500 italic dark:text-gray-400">No custom fixed expenses added yet.</p>';
+                return;
+            }
+
+            expenses.forEach(item => {
+                const isMonthly = item.frequency === 'monthly';
+                const displayFrequency = isMonthly ? '/ month' : '/ week';
+                const monthlyWeekly = isMonthly ? item.amount / WEEKS_IN_MONTH : item.amount;
+                const dueDayDisplay = isMonthly && item.dayOfMonth ? `(Due: ${item.dayOfMonth})` : '';
+
+                const fixedItemDiv = document.createElement('div'); 
+                // CRITICAL: Added transition property directly for the animation to work smoothly
+                fixedItemDiv.className = 'flex justify-between items-center bg-white p-3 rounded-lg border border-gray-200 transition-all duration-400 ease-out dark:bg-gray-700 dark:border-gray-600';
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'flex-grow';
+                contentDiv.innerHTML = `
+                    <p class="font-medium text-gray-800 dark:text-white">${item.name} ${dueDayDisplay}</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        ${formatCurrencyDisplay(item.amount)} ${displayFrequency}
+                        <span class="text-xs text-gray-400"> (Avg Weekly: ${formatCurrencyDisplay(monthlyWeekly)})</span>
+                    </p>
+                `;
+
+                const removeBtn = document.createElement('button');
+                // Use a dedicated class for event delegation targeting
+                removeBtn.className = 'remove-fixed-outgoing-btn text-red-500 hover:text-red-700 transition duration-150 p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/50';
+                removeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`;
+                
+                // Set ID for delegation logic to pick up
+                removeBtn.setAttribute('data-id', item.id);
+
+                fixedItemDiv.appendChild(contentDiv);
+                fixedItemDiv.appendChild(removeBtn);
+                list.appendChild(fixedItemDiv); 
+            });
+            // NOTE: The permanent delegation listener is set up in initializeAppLogic
+        }
+
+        const renderWeeksTracker = (scheduledMonthlyPayments) => {
+            const list = document.getElementById('weeks-list');
+            list.innerHTML = '';
+            
+            const select = document.getElementById('expense-week');
+            // FIX: Ensure select exists before trying to manipulate it
+            if (!select) return; 
+
+            select.innerHTML = '';
+
+            const activePeriod = getActivePeriod();
+            const weeklyExpenses = getWeeklyExpenses();
+
+            // CRITICAL FIX: Ensure weeklyExpenses is a usable array. If not, fail gracefully.
+            if (!Array.isArray(weeklyExpenses) || weeklyExpenses.length === 0) {
+                 select.innerHTML = '<option value="">No weeks defined for period</option>';
+                 list.innerHTML = '<p class="text-gray-500 italic dark:text-gray-400">No weekly data available. Check Period Settings.</p>';
+                 return;
+            }
+
+
+            weeklyExpenses.forEach((week, index) => {
+                const dateRange = getDateRangeForWeek(index, activePeriod.startDate);
+                const option = document.createElement('option');
+                option.value = week.weekNum;
+                option.textContent = `Week ${week.weekNum} (${dateRange})`;
+                select.appendChild(option);
+
+                const remaining = week.allowanceRemaining; // Uses pre-calculated value from calculateTotals
+                const grossAllowance = week.grossWeeklyAllowance;
+                
+                const statusColor = remaining >= 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/70 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/70 dark:text-red-300';
+
+                const weekDiv = document.createElement('div');
+                weekDiv.className = 'border border-gray-200 rounded-xl overflow-hidden shadow-sm dark:border-gray-700';
+                // FIX: Removed incorrect apostrophe from class string in the div below
+                weekDiv.innerHTML = `
+                    <div class="flex justify-between items-center p-4 bg-gray-50 cursor-pointer dark:bg-gray-800" data-week-num="${week.weekNum}">
+                        <h3 class="font-bold text-lg text-gray-800 dark:text-white">Week ${week.weekNum} <span class="text-sm font-normal text-gray-500 dark:text-gray-400">(${dateRange})</span></h3>
+                        <div class="flex items-center space-x-4">
+                            <span class="text-sm font-medium text-gray-600 dark:text-gray-400">Available: ${formatCurrencyDisplay(grossAllowance)}</span>
+                            <span class="text-sm font-medium text-gray-600 dark:text-gray-400">Spent: ${formatCurrencyDisplay(week.totalSpent)}</span>
+                            <span class="p-2 rounded-lg font-bold ${statusColor}">Remaining: ${formatCurrencyDisplay(remaining)}</span>
+                            <svg data-arrow-icon="${week.weekNum}" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down transform transition-transform duration-300 dark:text-white"><path d="m6 9 6 6 6-6"/></svg>
+                        </div>
+                    </div>
+                    <div id="week-details-${week.weekNum}" class="p-4 bg-white hidden dark:bg-slate-900">
+                        <p class="font-semibold text-gray-700 mb-2 dark:text-gray-200">Weekly Expenses Breakdown:</p>
+                        <ul class="space-y-1 text-sm" id="expense-list-${week.weekNum}">
+                            <!-- Dynamic Fixed Outgoings Injected Here -->
+                            <!-- Ad-hoc expenses will be appended here -->
+                        </ul>
+                    </div>
+                `;
+                list.appendChild(weekDiv);
+
+                const expenseList = weekDiv.querySelector(`#expense-list-${week.weekNum}`);
+                let hasExpenses = false;
+
+                // NEW: 1. Inject scheduled fixed monthly expenses (for display only)
+                const scheduled = scheduledMonthlyPayments[week.weekNum] || [];
+                scheduled.forEach(fixedExp => {
+                    hasExpenses = true;
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center py-1 font-mono text-xs bg-red-50 dark:bg-red-900/20 px-2 rounded border border-red-200 dark:border-red-800/50';
+                    
+                    li.innerHTML = `
+                        <span class="flex-grow font-semibold text-red-700 dark:text-red-300">FIXED: ${fixedExp.name}</span>
+                        <span class="text-red-700 dark:text-red-300">${formatCurrencyDisplay(fixedExp.amount)}</span>
+                    `;
+                    expenseList.appendChild(li);
+                });
+
+
+                // 2. Append ad-hoc expenses (FIX: Ensure we loop through the expense array)
+                if (Array.isArray(week.expenses)) {
+                    week.expenses.forEach(exp => {
+                        hasExpenses = true;
+                        const li = document.createElement('li');
+                        li.className = 'flex justify-between items-center border-b border-gray-100 py-1 dark:border-gray-800';
+                        
+                        li.innerHTML = `
+                            <span class="flex-grow text-gray-800 dark:text-white">${exp.name}</span>
+                            <div class="flex items-center space-x-2">
+                                <span class="font-mono text-gray-800 dark:text-gray-200">${formatCurrencyDisplay(exp.amount)}</span>
+                                <button data-week-num="${week.weekNum}" data-id="${exp.id}" data-name="${exp.name}" data-amount="${exp.amount}" class="edit-weekly-expense-btn text-blue-400 hover:text-blue-600 transition duration-150 p-1 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/50">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-edit"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.37 3.63a1.5 1.5 0 0 1 2.12 2.12L12.12 15.12l-3.25.75.75-3.25L18.37 3.63Z"/></svg>
+                                </button>
+                                <button data-week-num="${week.weekNum}" data-id="${exp.id}" class="remove-weekly-expense-btn text-red-400 hover:text-red-600 transition duration-150 p-1 rounded-full hover:bg-red-100 dark:hover:bg-red-900/50">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                </button>
+                            </div>
+                        `;
+                        expenseList.appendChild(li);
+                    });
+                }
+                
+                // 3. Add placeholder if still empty
+                if (!hasExpenses) {
+                    expenseList.innerHTML = '<li class="text-gray-500 italic dark:text-gray-400">No expenses logged for this week.</li>';
+                }
+            });
+
+            // Re-attach event listeners after DOM manipulation
+            list.querySelectorAll('[data-week-num]').forEach(header => {
+                header.addEventListener('click', (e) => toggleWeekDetails(e.currentTarget.dataset.weekNum));
+            });
+
+            list.querySelectorAll('.remove-weekly-expense-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const weekNum = parseInt(e.currentTarget.dataset.weekNum);
+                    const expenseId = e.currentTarget.dataset.id;
+                    removeWeeklyExpense(weekNum, expenseId);
+                });
+            });
+            
+            list.querySelectorAll('.edit-weekly-expense-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const { weekNum, id, name, amount } = e.currentTarget.dataset;
+                    showEditModal(parseInt(weekNum), id, name, parseFloat(amount));
+                });
+            });
+        }
+        
+        const renderSettingsModal = (activeTab = 'periods') => {
+            // 1. Render Tabs
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                const tab = btn.dataset.tab;
+                const content = document.querySelector(`[data-tab-content="${tab}"]`);
+                
+                // Ensure elements exist before modifying classes
+                if (btn && content) {
+                    // Update class based on active state
+                    if (tab === activeTab) {
+                        btn.classList.add('bg-blue-100', 'text-blue-700', 'dark:bg-blue-900', 'dark:text-blue-200');
+                        btn.classList.remove('bg-gray-100', 'text-gray-600', 'hover:bg-gray-100', 'dark:bg-slate-700', 'dark:text-gray-300', 'dark:hover:bg-slate-600');
+                        content.classList.remove('hidden');
+                    } else {
+                        // Inactive styling (FIXED: Added specific dark mode classes for grayed-out state)
+                        btn.classList.remove('bg-blue-100', 'text-blue-700', 'dark:bg-blue-900', 'dark:text-blue-200');
+                        btn.classList.add('bg-gray-100', 'text-gray-600', 'hover:bg-gray-100', 'dark:bg-slate-700', 'dark:text-gray-300', 'dark:hover:bg-slate-600'); 
+                        content.classList.add('hidden');
+                    }
+                    btn.onclick = () => renderSettingsModal(tab);
+                }
+            });
+            
+            // 2. Render Fixed Outgoings (Always called, updates the list)
+            // NOTE: This call is the critical path for the instant update
+            renderFixedOutgoings(getFixedOutgoings());
+            
+            // 3. Render Period Selector
+            const selector = document.getElementById('period-selector');
+            selector.innerHTML = '';
+            Object.values(periodsData).forEach(period => {
+                const option = document.createElement('option');
+                option.value = period.id;
+                option.textContent = period.name;
+                if (period.id === activePeriodId) {
+                    option.selected = true;
+                }
+                selector.appendChild(option);
+            });
+            selector.onchange = (e) => setActivePeriod(e.target.value);
+            
+            // 4. Render Income & Date Form
+            const activePeriod = getActivePeriod();
+            // CRITICAL FIX: Ensure activePeriod is defined before accessing income properties
+            if (activePeriod && activePeriod.income) {
+                document.getElementById('form-period-name').textContent = activePeriod.name;
+                document.getElementById('period-name-input').value = activePeriod.name; // Keep name input up-to-date
+                document.getElementById('start-date-input').value = activePeriod.startDate;
+                document.getElementById('duration-input').value = activePeriod.durationWeeks;
+                
+                // Student Finance (Total)
+                document.getElementById('sf-input').value = activePeriod.income.studentFinance;
+
+                // WAGES (NEW FIELDS)
+                document.getElementById('hourly-rate-input').value = activePeriod.income.hourlyRate;
+                document.getElementById('hours-per-week-input').value = activePeriod.income.hoursPerWeek;
+
+                // PIP
+                document.getElementById('pip-daily-living-input').value = activePeriod.income.pip.dailyLivingRate;
+                document.getElementById('pip-mobility-input').value = activePeriod.income.pip.mobilityRate;
+                document.getElementById('pip-first-date-input').value = activePeriod.income.pip.firstDate; 
+                
+                document.getElementById('duration-input').min = 1;
+                document.getElementById('duration-input').max = 52;
+            }
+            
+            // 5. Render Additional Income Sources
+            renderAdditionalIncome(getAdditionalIncome());
+
+            // 6. Render Wage Payments
+            renderWagePayments(activePeriod.income.unscheduledWages); // UPDATED: unscheduledWages
+
+            // 7. Setup Fixed Outgoings UI listeners for the TAB version
+            const freqSelect = document.getElementById('outgoing-frequency-tab');
+            const dayGroup = document.getElementById('day-of-month-group-tab');
+            
+            if (freqSelect && dayGroup) {
+                const toggleDayInput = () => {
+                    const isMonthly = freqSelect.value === 'monthly';
+                    if (isMonthly) {
+                        dayGroup.classList.remove('hidden');
+                        document.getElementById('outgoing-day-of-month-tab').required = true;
+                    } else {
+                        dayGroup.classList.add('hidden');
+                        document.getElementById('outgoing-day-of-month-tab').required = false;
+                    }
+                };
+                
+                // CRITICAL FIX: Ensure toggle is applied immediately on change and on function call.
+                freqSelect.onchange = toggleDayInput;
+                toggleDayInput(); 
+            }
+            
+            // 8. Update Theme Radio Buttons
+            document.querySelectorAll('input[name="theme-choice"]').forEach(input => {
+                if (input.value === themeMode) {
+                    input.checked = true;
+                }
+            });
+
+
+            // Re-create icons for new content
+            if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+                lucide.createIcons();
+            }
+        }
+        
+        // --- CALCULATION LOGIC ---
+
+        /**
+         * Calculates the total financial inflow for each week of the active period, 
+         * using averaged amounts for Wages and PIP.
+         * @param {Object} period The active period data.
+         * @returns {Array<number>} Array of weekly total income amounts.
+         */
+        const calculateWeeklyInflows = (period) => {
+            const { durationWeeks, additionalIncome } = period;
+            const weeklyInflows = Array.from({ length: durationWeeks }, () => 0);
+            
+            // CRITICAL FIX: Add checks for income object properties to prevent crashes on bad data
+            const income = period.income || {};
+
+            const incomeData = {
+                studentFinance: income.studentFinance || 0,
+                hourlyRate: income.hourlyRate || 0,
+                hoursPerWeek: income.hoursPerWeek || 0,
+                unscheduledWages: income.unscheduledWages || [],
+                pipDaily: income.pip?.dailyLivingRate || 0,
+                pipMobility: income.pip?.mobilityRate || 0,
+            };
+            
+            // 1. Calculate Core Weekly Income Components (All Averaged/Recurring)
+            
+            // Student Finance (Averaged)
+            const weeklySF = durationWeeks > 0 ? incomeData.studentFinance / durationWeeks : 0;
+            
+            // Recurring Wages (Direct Weekly Calculation)
+            const weeklyWagesRecurring = incomeData.hourlyRate * incomeData.hoursPerWeek;
+
+            // Unscheduled Wage Correction (Averaged over period)
+            const totalUnscheduledWages = incomeData.unscheduledWages.reduce((sum, item) => sum + item.amount, 0);
+            const weeklyUnscheduledWageAvg = durationWeeks > 0 ? totalUnscheduledWages / durationWeeks : 0; 
+
+            // Additional Income (Recurring)
+            const customIncomeTotal = additionalIncome.reduce((sum, item) => sum + item.amount, 0);
+
+            // PIP (Averaged)
+            const pipRate28Days = incomeData.pipDaily + incomeData.pipMobility;
+            const pipAvgWeekly = pipRate28Days / DAYS_IN_PIP_CYCLE * 7; 
+            
+            const baseWeeklyIncome = weeklySF + customIncomeTotal + weeklyWagesRecurring + weeklyUnscheduledWageAvg + pipAvgWeekly;
+
+            // Apply stable base income to all weeks
+            for (let i = 0; i < durationWeeks; i++) {
+                weeklyInflows[i] = baseWeeklyIncome;
+            }
+
+            // NOTE: No cash flow adjustment needed for PIP or Wages here, as both are now averaged.
+            
+            return weeklyInflows;
+        }
+
+
+        /**
+         * Calculates the total fixed outgoings (averaged) for the dashboard summary.
+         * Also calculates the net adjustment needed for each specific week based on monthly due dates.
+         * @param {Array} fixedExpenses All fixed expenses for the period.
+         * @returns {object} {totalFixedOutgoingsAvg, weeklyFixedAdjustments, scheduledMonthlyPayments}
+         */
+        const calculateFixedExpensesAndAdjustments = (fixedExpenses, periodStartDate, durationWeeks) => {
+            let totalFixedOutgoingsAvg = 0;
+            const scheduledMonthlyPayments = {}; // { weekNum: [bill, bill, ...], ... }
+
+            const weeklyBills = fixedExpenses.filter(e => e.frequency === 'weekly');
+            const monthlyBills = fixedExpenses.filter(e => e.frequency === 'monthly');
+            const monthlyAvgDeduction = monthlyBills.reduce((sum, item) => sum + (item.amount / WEEKS_IN_MONTH), 0);
+            
+            // 1. Calculate Average Total Fixed Outgoings (for Dashboard)
+            totalFixedOutgoingsAvg = weeklyBills.reduce((sum, item) => sum + item.amount, 0);
+            totalFixedOutgoingsAvg += monthlyAvgDeduction;
+
+            // 2. Calculate Weekly Fixed Adjustments (for Weekly Tracker)
+            const weeklyFixedAdjustments = Array.from({ length: durationWeeks }, () => 0);
+            const periodStart = new Date(periodStartDate);
+
+            monthlyBills.forEach(bill => {
+                const amount = bill.amount;
+                const day = bill.dayOfMonth;
+                const avgDeduction = amount / WEEKS_IN_MONTH;
+
+                if (!day || day < 1 || day > 31) {
+                    // Safety net: Treat bills without a due day as pure averages (already accounted for)
+                    return; 
+                }
+
+                // Iterate over all weeks in the period
+                for (let i = 0; i < durationWeeks; i++) {
+                    const weekNum = i + 1;
+                    // Calculate start and end date of the current week (Week i+1)
+                    const weekStartDate = new Date(periodStart.getTime());
+                    weekStartDate.setDate(weekStartDate.getDate() + (i * 7));
+                    const weekEndDate = new Date(weekStartDate.getTime());
+                    weekEndDate.setDate(weekEndDate.getDate() + 6);
+
+                    let dueThisWeek = 0;
+                    
+                    const checkMonth = (date) => {
+                        const year = date.getFullYear();
+                        const month = date.getMonth();
+                        const dueOnDay = new Date(year, month, day); 
+                        
+                        // Check if the due date is valid (e.g., day 30 in February becomes March 1st, so check the day)
+                        if (dueOnDay.getDate() !== day) return false; 
+                        
+                        // Check if the due date falls within the week's range
+                        return dueOnDay >= weekStartDate && dueOnDay <= weekEndDate;
+                    };
+                    
+                    if (checkMonth(weekStartDate)) {
+                        dueThisWeek = amount;
+                    } 
+                    else if (weekStartDate.getMonth() !== weekEndDate.getMonth()) {
+                        if (checkMonth(weekEndDate)) {
+                            dueThisWeek = amount;
+                        }
+                    }
+
+                    // Schedule the bill for display if due this week
+                    if (dueThisWeek > 0) {
+                        if (!scheduledMonthlyPayments[weekNum]) {
+                            scheduledMonthlyPayments[weekNum] = [];
+                        }
+                        // Store the full bill object for display in the weekly tracker
+                        scheduledMonthlyPayments[weekNum].push(bill);
+                    }
+
+                    // Net Fixed Adjustment for the week: 
+                    // (Full Bill Due) - (Avg Bill already accounted for on dashboard)
+                    weeklyFixedAdjustments[i] += dueThisWeek - avgDeduction;
+                }
+            });
+
+            return { totalFixedOutgoingsAvg, weeklyFixedAdjustments, scheduledMonthlyPayments };
+        }
+
+
+        const calculateTotals = (fixedExpenses) => {
+            const activePeriod = getActivePeriod();
+            if (!activePeriod) return;
+
+            // 1. Calculate Dynamic Weekly Income (Inflows) 
+            const weeklyInflows = calculateWeeklyInflows(activePeriod);
+
+            // CRITICAL FIX: Ensure weeklyInflows is an array with content before trying to reduce it
+            const totalWeeklyIncomeAvg = weeklyInflows && weeklyInflows.length > 0 && activePeriod.durationWeeks > 0 
+                ? weeklyInflows.reduce((a, b) => a + b, 0) / activePeriod.durationWeeks
+                : 0;
+            
+            // 2. Calculate Fixed Outgoings (Average) and Weekly Adjustments
+            const { totalFixedOutgoingsAvg, weeklyFixedAdjustments, scheduledMonthlyPayments } = calculateFixedExpensesAndAdjustments(
+                fixedExpenses,
+                activePeriod.startDate,
+                activePeriod.durationWeeks
+            );
+
+            // 3. Base Weekly Spending Allowance (Average)
+            const weeklyAllowanceAvg = totalWeeklyIncomeAvg - totalFixedOutgoingsAvg;
+            
+            // NEW: Estimated Monthly Allowance (UPDATED CALCULATION)
+            const estimatedMonthlyAllowance = weeklyAllowanceAvg * WEEKS_IN_MONTH;
+            const estimatedMonthlyIncome = totalWeeklyIncomeAvg * WEEKS_IN_MONTH; // For display context
+            const estimatedMonthlyOutgoings = totalFixedOutgoingsAvg * WEEKS_IN_MONTH; // For display context
+
+
+            // Update UI Summary
+            document.getElementById('total-income').textContent = formatCurrencyDisplay(totalWeeklyIncomeAvg);
+            document.getElementById('estimated-monthly-allowance-value').textContent = formatCurrencyDisplay(estimatedMonthlyAllowance); // UPDATED ID
+            document.getElementById('total-fixed-outgoings').textContent = formatCurrencyDisplay(totalFixedOutgoingsAvg);
+            document.getElementById('weekly-allowance').textContent = formatCurrencyDisplay(weeklyAllowanceAvg);
+            
+            // Update Monthly Allowance Inputs Text (For Context)
+            document.getElementById('monthly-allowance-inputs').innerHTML = `
+                <p>Monthly Income: ${formatCurrencyDisplay(estimatedMonthlyIncome)}</p>
+                <p>Monthly Outgoings: ${formatCurrencyDisplay(estimatedMonthlyOutgoings)}</p>
+            `;
+            
+            // Update Income Breakdown
+            const income = activePeriod.income || {};
+            const pipRate28Days = (income.pip?.dailyLivingRate || 0) + (income.pip?.mobilityRate || 0);
+            const pipAvg = pipRate28Days / DAYS_IN_PIP_CYCLE * 7; // Displaying the weekly average rate
+            const sfAvg = activePeriod.durationWeeks > 0 ? income.studentFinance / activePeriod.durationWeeks : 0;
+            const wagesAvg = (income.hourlyRate || 0) * (income.hoursPerWeek || 0); // NEW: Direct weekly calculation
+            
+            // Ensure unscheduledWages array exists before reduce
+            const unscheduledWagesArray = income.unscheduledWages || [];
+            const unscheduledAvg = activePeriod.durationWeeks > 0 ? unscheduledWagesArray.reduce((a, b) => a + b.amount, 0) / activePeriod.durationWeeks : 0;
+
+            let breakdownHTML = `
+                <p>Wages (Recurring): ${formatCurrencyDisplay(wagesAvg)}</p>
+                <p>Student Finance (Avg): ${formatCurrencyDisplay(sfAvg)}</p>
+                <p>PIP (Avg): ${formatCurrencyDisplay(pipAvg)}</p>
+            `;
+            if (activePeriod.additionalIncome.length > 0) {
+                 const customAvg = activePeriod.additionalIncome.reduce((sum, item) => sum + item.amount, 0);
+                 breakdownHTML += `<p class="font-bold text-green-700">Other Weekly Income: ${formatCurrencyDisplay(customAvg)}</p>`;
+            }
+            if (unscheduledAvg > 0) {
+                 breakdownHTML += `<p class="text-sm text-gray-500">Unscheduled Adj: ${formatCurrencyDisplay(unscheduledAvg)}</p>`;
+            }
+            document.getElementById('income-breakdown').innerHTML = breakdownHTML;
+            
+            // 4. Recalculate weekly remaining allowance (using the cash flow adjustment)
+            const currentWeeklyData = getWeeklyExpenses().map((week, index) => {
+                const totalSpent = week.expenses.reduce((sum, exp) => sum + exp.amount, 0);
+                
+                // Actual Weekly Allowance = (Avg Allowance) + (Inflow Adjustment) - (Outflow Adjustment) - (Variable Spending)
+                // weeklyFixedAdjustments[index] = (Full Bill Due) - (Avg Bill already accounted for)
+                const inflowAdjustment = weeklyInflows[index] - totalWeeklyIncomeAvg;
+                
+                // CRITICAL FIX: Changed addition to subtraction to correctly lower the allowance when a fixed bill is due.
+                const grossWeeklyAllowance = weeklyAllowanceAvg + inflowAdjustment - weeklyFixedAdjustments[index];
+                const allowanceRemaining = grossWeeklyAllowance - totalSpent;
+
+                return {
+                    ...week,
+                    totalSpent: totalSpent,
+                    allowanceRemaining: allowanceRemaining,
+                    grossWeeklyAllowance: grossWeeklyAllowance
+                };
+            });
+            
+            // Update the global state with recalculated expenses
+            periodsData[activePeriodId].weeklyExpenses = currentWeeklyData;
+            
+            // Update main header details
+            document.getElementById('period-name').textContent = activePeriod.name;
+            document.getElementById('num-weeks-display').textContent = activePeriod.durationWeeks;
+            document.getElementById('period-dates').textContent = getDateRangeForWeek(activePeriod.durationWeeks - 1, activePeriod.startDate);
+            
+            // Finally, render the UI for the active period
+            renderWeeksTracker(scheduledMonthlyPayments);
+        }
+        
+        
+        // --- DATA INITIALIZATION & MODE SWITCHING ---
+
+        const getDocRefs = () => {
+            const userRoot = `/artifacts/${appId}/users/${userId}/budget_data`;
+            return {
+                fixedDocRef: doc(db, `${userRoot}/${activePeriodId}_fixed`),
+                weeklyDocRef: doc(db, `${userRoot}/${activePeriodId}_weekly`),
+            };
+        }
+        
+        function setupCloudListeners() {
+            if (!isAuthReady || isLocalMode) return;
+            
+            if (unsubscribeFixed) unsubscribeFixed();
+            if (unsubscribeWeekly) unsubscribeWeekly();
+            
+            const { fixedDocRef, weeklyDocRef } = getDocRefs();
+            
+            // Listener for Fixed Outgoings
+            unsubscribeFixed = onSnapshot(fixedDocRef, (docSnap) => {
+                const fixedOutgoings = docSnap.exists() && docSnap.data().fixedOutgoings ? docSnap.data().fixedOutgoings : [];
+                periodsData[activePeriodId].fixedOutgoings = fixedOutgoings;
+                calculateTotals(fixedOutgoings);
+            }, (error) => console.error("Fixed Outgoings snapshot error:", error));
+
+            // Listener for Weekly Expenses
+            unsubscribeWeekly = onSnapshot(weeklyDocRef, (docSnap) => {
+                const data = docSnap.exists() && docSnap.data().weeklyExpenses ? docSnap.data().weeklyExpenses : [];
+                periodsData[activePeriodId].weeklyExpenses = data;
+                calculateTotals(getFixedOutgoings()); 
+            }, (error) => console.error("Weekly Expenses snapshot error:", error));
+        }
+
+        async function initializeAppLogic() {
+            // Get modal elements once
+            settingsModal = document.getElementById('settings-modal');
+            settingsModalContent = document.getElementById('settings-modal-content');
+            welcomeModal = document.getElementById('welcome-modal'); // NEW
+            welcomeModalContent = document.getElementById('welcome-modal-content'); // NEW
+
+            // --- THEME INITIALIZATION ---
+            applyTheme(themeMode);
+            // Listen for OS theme changes
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                if (themeMode === 'system') {
+                    applyTheme('system');
+                }
+            });
+
+
+            // --- EVENT LISTENER SETUP ---
+            
+            const showSettingsBtn = document.getElementById('show-settings-btn');
+            if (showSettingsBtn) showSettingsBtn.addEventListener('click', () => showSettingsModal());
+            
+            const addIncomeForm = document.getElementById('add-additional-income-form');
+            if (addIncomeForm) addIncomeForm.addEventListener('submit', addAdditionalIncome);
+            
+            const addWageForm = document.getElementById('add-wage-payment-form');
+            if (addWageForm) addWageForm.addEventListener('submit', addWagePayment);
+            
+            const periodSettingsForm = document.getElementById('period-settings-form');
+            if (periodSettingsForm) periodSettingsForm.addEventListener('submit', handlePeriodSettingsFormSubmit);
+            
+            const addPeriodBtn = document.getElementById('add-period-btn');
+            if (addPeriodBtn) addPeriodBtn.addEventListener('click', addPeriod);
+            
+            const deletePeriodBtn = document.getElementById('delete-period-btn');
+            if (deletePeriodBtn) deletePeriodBtn.addEventListener('click', deletePeriod);
+            
+            const resetDataBtn = document.getElementById('reset-period-data-btn');
+            if (resetDataBtn) resetDataBtn.addEventListener('click', () => {
+                 const messageBox = document.getElementById('message-box');
+                 messageBox.innerHTML = `
+                     <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm">
+                         <h3 class="text-xl font-bold mb-4 text-red-600">⚠️ Confirm Reset</h3>
+                         <p class="text-gray-700 mb-4">Are you sure you want to reset ALL income, expenses, and settings for the current period? This action cannot be undone.</p>
+                         <div class="flex justify-end space-x-3">
+                             <button type="button" onclick="closeMessageBox()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition duration-150">Cancel</button>
+                             <button type="button" onclick="resetActivePeriodToInitialData(); closeMessageBox();" class="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition duration-150">Reset Data</button>
+                         </div>
+                     </div>
+                 `;
+                 messageBox.classList.remove('hidden');
+            });
+            
+            // Fixed Outgoings form listener (for the TAB)
+            const addOutgoingForm = document.getElementById('add-fixed-outgoing-form-tab');
+            if (addOutgoingForm) addOutgoingForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const name = document.getElementById('outgoing-name-tab').value.trim();
+                const amount = parseFloat(document.getElementById('outgoing-amount-tab').value);
+                const frequency = document.getElementById('outgoing-frequency-tab').value;
+                const dayOfMonth = frequency === 'monthly' ? parseInt(document.getElementById('outgoing-day-of-month-tab').value) : null;
+
+                if (!isAuthReady || name === "" || isNaN(amount) || amount <= 0) return;
+                if (frequency === 'monthly' && (isNaN(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 31)) {
+                    console.error("Monthly expenses require a valid day of month (1-31).");
+                    return;
+                }
+
+                const newOutgoing = { id: crypto.randomUUID(), name, amount, frequency, dayOfMonth };
+                let currentFixedOutgoings = getFixedOutgoings();
+
+                if (isLocalMode) {
+                    currentFixedOutgoings.push(newOutgoing);
+                    periodsData[activePeriodId].fixedOutgoings = currentFixedOutgoings;
+                    saveLocalPeriods();
+                    
+                    // FIX: Explicitly re-render the list and recalculate totals
+                    // Use setTimeout to ensure DOM updates before next render cycle
+                    setTimeout(() => {
+                        renderFixedOutgoings(currentFixedOutgoings);
+                        calculateTotals(currentFixedOutgoings); 
+                    }, 0);
+                    
+                } else {
+                    try {
+                        const { fixedDocRef } = getDocRefs();
+                        await updateDoc(fixedDocRef, { fixedOutgoings: arrayUnion(newOutgoing) });
+                    } catch (error) {
+                        console.error("Error adding fixed outgoing (Cloud):", error);
+                    }
+                }
+                e.target.reset(); 
+                // Reset the frequency to trigger UI reset
+                document.getElementById('outgoing-frequency-tab').value = 'monthly'; 
+                document.getElementById('day-of-month-group-tab').classList.add('hidden'); // Ensure day input is hidden by default after reset
+            });
+            
+            // Add Weekly Ad-Hoc Expense listener
+            const addWeeklyExpenseForm = document.getElementById('add-weekly-expense-form');
+            if (addWeeklyExpenseForm) addWeeklyExpenseForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const weekNum = parseInt(document.getElementById('expense-week').value);
+                const name = document.getElementById('expense-name').value.trim();
+                const amount = parseFloat(document.getElementById('expense-amount').value);
+
+                if (!isAuthReady || name === "" || isNaN(amount) || amount <= 0) return;
+
+                const newExpense = { id: crypto.randomUUID(), name, amount };
+                let currentWeeklyExpenses = getWeeklyExpenses();
+                const targetWeekIndex = currentWeeklyExpenses.findIndex(w => w.weekNum === weekNum);
+                
+                if (targetWeekIndex === -1) return;
+
+                if (isLocalMode) {
+                    currentWeeklyExpenses[targetWeekIndex].expenses.push(newExpense);
+                    periodsData[activePeriodId].weeklyExpenses = currentWeeklyExpenses;
+                    saveLocalPeriods();
+                    calculateTotals(getFixedOutgoings());
+                } else {
+                    try {
+                        const { weeklyDocRef } = getDocRefs();
+                        const docSnap = await getDoc(weeklyDocRef);
+                        let dataToUpdate = docSnap.exists() ? docSnap.data().weeklyExpenses : [];
+                        
+                        if (dataToUpdate.length > 0) {
+                            dataToUpdate = dataToUpdate.map(w => {
+                                if (w.weekNum === weekNum) {
+                                    return { ...w, expenses: [...w.expenses, newExpense] };
+                                }
+                                return w;
+                            });
+                            await setDoc(weeklyDocRef, { weeklyExpenses: dataToUpdate });
+                        }
+                    } catch (error) {
+                        console.error("Error adding weekly expense (Cloud):", error);
+                    }
+                }
+                e.target.reset(); 
+            });
+
+            // NEW: Event Delegation Listener for Fixed Outgoings Deletion
+            const fixedOutgoingsList = document.getElementById('fixed-outgoings-list');
+            if (fixedOutgoingsList) {
+                fixedOutgoingsList.addEventListener('click', (e) => {
+                    const deleteButton = e.target.closest('.remove-fixed-outgoing-btn');
+                    if (deleteButton) {
+                        const itemId = deleteButton.dataset.id;
+                        removeFixedOutgoing(itemId);
+                    }
+                });
+            }
+
+            // Fixed Outgoings Frequency Toggle (TAB VERSION)
+            const freqSelectTab = document.getElementById('outgoing-frequency-tab');
+            const dayGroupTab = document.getElementById('day-of-month-group-tab');
+            if (freqSelectTab && dayGroupTab) {
+                const toggleDayInputTab = () => {
+                    const isMonthly = freqSelectTab.value === 'monthly';
+                    if (isMonthly) {
+                        dayGroupTab.classList.remove('hidden');
+                        document.getElementById('outgoing-day-of-month-tab').required = true;
+                    } else {
+                        dayGroupTab.classList.add('hidden');
+                        document.getElementById('outgoing-day-of-month-tab').required = false;
+                    }
+                };
+                freqSelectTab.onchange = toggleDayInputTab;
+                toggleDayInputTab();
+            }
+
+
+            updateModeDisplay();
+
+            if (isLocalMode) {
+                periodsData = getLocalData(LOCAL_STORAGE_PERIODS_KEY, INITIAL_PERIODS_DATA);
+                activePeriodId = getLocalData(LOCAL_STORAGE_ACTIVE_PERIOD_KEY, 'semester-1');
+                
+                // CRITICAL FIX: Ensure periodsData is populated with INITIAL_PERIODS_DATA if localStorage was empty or corrupted.
+                if (Object.keys(periodsData).length === 0 || !periodsData[activePeriodId]) {
+                    periodsData = JSON.parse(JSON.stringify(INITIAL_PERIODS_DATA));
+                    activePeriodId = 'semester-1';
+                    saveLocalPeriods();
+                }
+                
+                // --- CRITICAL DATA INTEGRITY CHECK (Ensure all keys exist) ---
+                if (periodsData && periodsData[activePeriodId]) {
+                    const currentIncome = periodsData[activePeriodId].income || {};
+                    const initialIncome = INITIAL_PERIODS_DATA['semester-1'].income; 
+                    
+                    periodsData[activePeriodId].income = {
+                        ...initialIncome,
+                        ...currentIncome,
+                        pip: {
+                            ...initialIncome.pip,
+                            ...(currentIncome.pip || {}),
+                        },
+                        unscheduledWages: currentIncome.unscheduledWages || [],
+                    };
+
+                    if (!Array.isArray(periodsData[activePeriodId].weeklyExpenses) || periodsData[activePeriodId].weeklyExpenses.length === 0) {
+                         periodsData[activePeriodId].weeklyExpenses = generateInitialWeeks(periodsData[activePeriodId].durationWeeks);
+                    }
+                }
+                // --- END CRITICAL FIX ---
+
+
+                // Ensure initial structure is present and correct
+                if (getLocalData(LOCAL_STORAGE_PERIODS_KEY) === null) {
+                    saveLocalPeriods();
+                }
+                
+                const hasSeenWelcome = getLocalData(LOCAL_STORAGE_WELCOME_KEY, false);
+                
+                document.getElementById('loading-spinner').classList.add('hidden');
+                
+                if (!hasSeenWelcome) {
+                    // Show welcome screen first
+                    welcomeModal.classList.remove('hidden');
+                    welcomeModal.style.opacity = 0;
+                    welcomeModal.offsetHeight; 
+                    setTimeout(() => {
+                        welcomeModal.style.opacity = 1;
+                        welcomeModalContent.classList.remove('translate-y-5', 'opacity-0');
+                        welcomeModalContent.classList.add('translate-y-0', 'opacity-100');
+                    }, 10);
+                } else {
+                    // Start app directly
+                    startAppAfterWelcome();
+                }
+
+
+            } else {
+                try {
+                    app = initializeApp(firebaseConfig);
+                    auth = getAuth(app);
+                    db = getFirestore(app);
+
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+
+                    onAuthStateChanged(auth, async (user) => {
+                        if (user) {
+                            userId = user.uid;
+                            isAuthReady = true;
+                            
+                            // Check welcome on cloud init too (though local mode handles most use cases)
+                            const hasSeenWelcome = getLocalData(LOCAL_STORAGE_WELCOME_KEY, false);
+                            
+                            document.getElementById('loading-spinner').classList.add('hidden');
+                            updateModeDisplay();
+
+                            if (!hasSeenWelcome) {
+                                // Show welcome screen first
+                                welcomeModal.classList.remove('hidden');
+                                welcomeModal.style.opacity = 0;
+                                welcomeModal.offsetHeight; 
+                                setTimeout(() => {
+                                    welcomeModal.style.opacity = 1;
+                                    welcomeModalContent.classList.remove('translate-y-5', 'opacity-0');
+                                    welcomeModalContent.classList.add('translate-y-0', 'opacity-100');
+                                }, 10);
+                                return; // Stop initialization until dismissed
+                            }
+                            
+                            
+                            const initialPeriodId = 'semester-1';
+                            const initialPeriodData = INITIAL_PERIODS_DATA[initialPeriodId];
+                            
+                            const fixedDocRef = doc(db, `/artifacts/${appId}/users/${userId}/budget_data/${initialPeriodId}_fixed`);
+                            const weeklyDocRef = doc(db, `/artifacts/${appId}/users/${userId}/budget_data/${initialPeriodId}_weekly`);
+                            
+                            const fixedDocSnap = await getDoc(fixedDocRef);
+                            const weeklyDocSnap = await getDoc(weeklyDocRef);
+                            
+                            if (!fixedDocSnap.exists()) {
+                                await setDoc(fixedDocRef, { fixedOutgoings: initialPeriodData.fixedOutgoings });
+                            }
+                            if (!weeklyDocSnap.exists()) {
+                                await setDoc(weeklyDocRef, { weeklyExpenses: initialPeriodData.weeklyExpenses });
+                            }
+                            
+                            periodsData = INITIAL_PERIODS_DATA; 
+                            activePeriodId = initialPeriodId;
+                            
+                            setupCloudListeners();
+                            startAppAfterWelcome(); // Start app after cloud listeners setup
+
+                        } else {
+                            console.error("Authentication failed. Falling back to local mode.");
+                            isLocalMode = true;
+                            initializeAppLogic(); // Re-run as local mode
+                        }
+                    });
+
+                } catch (error) {
+                    console.error("Error initializing Firebase, falling back to local mode:", error);
+                    isLocalMode = true;
+                    initializeAppLogic(); // Re-run as local mode
+                }
+            }
+        }
+        
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            initializeAppLogic();
+
+            if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+                lucide.createIcons();
+            }
+        };
+
+    </script>
+</body>
+</html>

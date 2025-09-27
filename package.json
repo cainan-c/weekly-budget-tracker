@@ -1,0 +1,32 @@
+{
+  "name": "weekly-budget-tracker",
+  "version": "1.0.0",
+  "description": "A weekly budget tracker built with HTML and Electron.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder -m"
+  },
+  "keywords": [
+    "electron",
+    "budget",
+    "finance"
+  ],
+  "author": "Cainan",
+  "license": "The Unlicense",
+  "dependencies": {
+
+  },
+  "devDependencies": {
+    "electron-builder": "^24.12.0"
+  },
+  "build": {
+    "appId": "com.cainanc.weeklybudget",
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    }
+  }
+}
