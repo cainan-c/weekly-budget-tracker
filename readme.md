@@ -6,6 +6,9 @@ Simple Electron based application with the goal of helping manage finances, espe
 ![img3](https://i.imgur.com/KgrFyrh.png)
 ![img4](https://i.imgur.com/PM5dL1c.png)
 
+Features:
+Dynamically see your weekly budget based on one-time and weekly and monthly outgoings.  
+Track where money is spending it, by adding what has been spent on any given week.  
 
 ## Build Instructions
 ###  Prerequisites
@@ -42,3 +45,4 @@ This command will:
 1. Compile your Electron application.
 2. Package it specifically for macOS.
 3. Create a `dist` folder in your project directory containing the `.dmg` installer and the final `.app` bundle, ready for distribution on macOS.
+
